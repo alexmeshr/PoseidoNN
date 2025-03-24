@@ -40,6 +40,15 @@
   background-color: white;
 }
 
+/* Стили для селектора класса */
+.classSelector {
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  cursor: pointer;
+  border: 2px solid black;
+  border-radius: 8px;
+  background-color: white;
+}
 
 /* Основной контент: три панели */
 .mainContent {
@@ -61,7 +70,7 @@
 
 /* Миниатюры */
 .thumbnail {
-  width: 80%;
+  width: 100%;
   margin: 0.5rem 0;
   cursor: pointer;
   border: 2px solid black;
@@ -139,8 +148,15 @@ canvas {
 }
 
 .progressBar {
-  flex-grow: 1;
+  flex-grow: 2;
   height: 20px;
+}
+
+.editingControls {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
 }
 
 .placeholder {
@@ -174,3 +190,34 @@ canvas {
   color: red;
   font-weight: bold;
 }
+
+.thumbnailWrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.thumbnailContainer {
+  position: relative;
+  width: 80%;
+}
+
+.bboxThumbnail {
+  position: absolute;
+  border: 1px solid red;
+  pointer-events: none;
+}
+
+.thumbnailStats {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  //background: rgba(0, 0, 0, 0.6);
+  color: red;
+  font-weight: bold;
+  padding: 3px 6px;
+  font-size: 12px;
+  border-radius: 4px;
+}
+

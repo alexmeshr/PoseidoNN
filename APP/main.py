@@ -95,12 +95,13 @@ task_progress = {}
 
 def fake_object_detection(image_data: bytes, task_id: str, img_index:int, total_imgs: int):
     print(total_imgs)
-    time.sleep(img_index*0.2)  # Имитация задержки для детекции
+    time.sleep(img_index*0.3)  # Имитация задержки для детекции
     print(task_progress[task_id]["progress"])
     # Добавляем фейковые объекты
     task_progress[task_id]["results"][img_index].extend([
-                {"class": "Cat", "bbox": [50, 50, 200, 200]},
-                {"class": "Dog", "bbox": [300, 100, 450, 350]},
+                {"class": "class1", "bbox": [50, 50, 200, 200]},
+                {"class": "class2", "bbox": [300, 100, 450, 350]},
+                #{"class": "class3", "bbox": [600, 400, 350, 250]},
             ])
     task_progress[task_id]["processed"] += 1
     task_progress[task_id]["progress"] = int((task_progress[task_id]["processed"] / total_imgs) * 100)
