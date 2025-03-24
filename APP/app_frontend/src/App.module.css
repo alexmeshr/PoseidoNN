@@ -1,0 +1,176 @@
+/* Общий контейнер */
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* Верхняя панель (20% высоты) */
+.topPanel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 20%;
+  width: 100%;
+  border: 4px solid black;
+  box-sizing: border-box;
+}
+
+/* Заголовок приложения */
+.appTitle {
+  font-size: 2rem;
+  font-weight: bold;
+  margin-bottom: 1rem;
+}
+
+/* Группа кнопок */
+.buttonGroup {
+  display: flex;
+  gap: 1rem;
+}
+
+/* Стили кнопок */
+.button {
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  cursor: pointer;
+  border: 2px solid black;
+  border-radius: 8px;
+  background-color: white;
+}
+
+
+/* Основной контент: три панели */
+.mainContent {
+  display: flex;
+  flex: 1;
+}
+
+/* Левая панель (80% высоты, 20% ширины) */
+.leftPanel {
+  width: 20%;
+  height: 80vh;
+  overflow-y: auto;
+  border-right: 4px solid black;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Миниатюры */
+.thumbnail {
+  width: 80%;
+  margin: 0.5rem 0;
+  cursor: pointer;
+  border: 2px solid black;
+}
+
+/* Активная миниатюра */
+.activeThumbnail {
+  border: 4px solid red;
+}
+
+/* Центральная панель (изображение) */
+.centerPanel {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-left: 4px solid black;
+  border-right: 4px solid black;
+  box-sizing: border-box;
+}
+
+.activeImage {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+/* Правая панель (статистика) */
+.rightPanel {
+  width: 20%;
+  height: 80vh;
+  border-left: 4px solid black;
+  box-sizing: border-box;
+  padding: 1rem;
+  overflow-y: auto;
+}
+
+.statsTitle {
+  font-size: 1.5rem;
+  font-weight: bold;
+  margin-bottom: 1rem;
+}
+
+.statsItem {
+  margin: 0.5rem 0;
+}
+
+.canvasContainer {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+canvas {
+  max-width: 100%;
+  max-height: 80vh;
+  cursor: crosshair;
+}
+
+.processedBadge {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  background: #4CAF50;
+  color: white;
+  padding: 2px 5px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+.progressContainer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 300px;
+}
+
+.progressBar {
+  flex-grow: 1;
+  height: 20px;
+}
+
+.placeholder {
+  padding: 20px;
+  text-align: center;
+  color: #666;
+}
+
+.noStats {
+  padding: 10px;
+  color: #888;
+  font-style: italic;
+}
+
+.error {
+  color: #ff4444;
+  padding: 10px;
+  border: 1px solid #ff4444;
+  margin: 10px;
+}
+
+.imageWrapper {
+  position: relative;
+}
+
+.bbox {
+  position: absolute;
+  border: 2px solid red;
+  pointer-events: none; /* Не мешает взаимодействию с изображением */
+  box-sizing: border-box;
+  color: red;
+  font-weight: bold;
+}

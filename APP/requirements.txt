@@ -1,0 +1,6 @@
+ultralytics
+fastapi
+loguru
+pandas
+python-multipart
+uvicorn
