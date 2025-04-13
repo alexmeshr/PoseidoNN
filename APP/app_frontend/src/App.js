@@ -2,6 +2,9 @@ import React, { useState, useRef, useEffect } from "react";
 import axios from 'axios';
 import styles from "./App.module.css";
 
+import BBoxEditor from './components/BBoxEditor';
+import './styles.css';
+
 const App = () => {
   const [images, setImages] = useState([]);
   const [selectedImage, setSelectedImage] = useState(null);
@@ -14,6 +17,62 @@ const App = () => {
   const [selectedClass, setSelectedClass] = useState("class1");
   const startCoords = useRef(null);
 
+  const [imageData, setImageData] = useState(null);
+  const fileInputRef = useRef(null);
+
+  // Загрузка JSON-файла с разметкой
+  const handleJsonUpload = (e) => {
+    const file = e.target.files[0];
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const data = JSON.parse(event.target.result);
+      setImageData(data);
+      // Автоматически выбираем первое изображение
+      const firstImage = Object.keys(data)[0];
+      setCurrentImage(firstImage);
+    };
+    reader.readAsText(file);
+  };
+
+  // Сохранение изменённой разметки
+  const handleSave = () => {
+    const dataStr = JSON.stringify(imageData, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'updated_annotations.json';
+    a.click();
+  };
+
+  return (
+    <div className="app">
+      <h1>Редактор разметки</h1>
+      <input
+        type="file"
+        accept=".json"
+        onChange={handleJsonUpload}
+        ref={fileInputRef}
+      />
+      {imageData && currentImage && (
+        <>
+          <BBoxEditor
+            imageName={currentImage}
+            annotations={imageData[currentImage]}
+            onUpdate={(updatedAnnotations) => {
+              setImageData({
+                ...imageData,
+                [currentImage]: updatedAnnotations,
+              });
+            }}
+          />
+          <button onClick={handleSave}>Сохранить разметку</button>
+        </>
+      )}
+    </div>
+  );
+}
+  
 const classNames = {
   class1: "Нить",
   class2: "Пленка",
