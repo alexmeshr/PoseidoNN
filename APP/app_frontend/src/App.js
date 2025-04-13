@@ -1,9 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import axios from 'axios';
 import styles from "./App.module.css";
-
-import BBoxEditor from './components/BBoxEditor';
-import './styles.css';
+import BoundingBoxEditor from "./components/BoundingBoxEditor";
 
 const App = () => {
   const [images, setImages] = useState([]);
@@ -13,97 +11,87 @@ const App = () => {
   const [stats, setStats] = useState({});
   const [boundingBoxes, setBoundingBoxes] = useState({});
   const [isEditing, setIsEditing] = useState(false);
-  const [tempBoxes, setTempBoxes] = useState({});
   const [selectedClass, setSelectedClass] = useState("class1");
-  const startCoords = useRef(null);
+  const [annotationData, setAnnotationData] = useState(null);
+  const [showBBoxEditor, setShowBBoxEditor] = useState(false);
 
-  const [imageData, setImageData] = useState(null);
-  const fileInputRef = useRef(null);
+  const classNames = {
+    class1: "Нить",
+    class2: "Пленка",
+    class3: "Обломок",
+    class4: "Сфера",
+    class5: "Гранула",
+  };
 
-  // Загрузка JSON-файла с разметкой
-  const handleJsonUpload = (e) => {
+  const colors = {
+    class1: "#FF0000",
+    class2: "#00FF00",
+    class3: "#0000FF",
+    class4: "#FFFF00",
+    class5: "#FF00FF"
+  };
+
+  // Загрузка аннотаций из JSON
+  const handleAnnotationUpload = (e) => {
     const file = e.target.files[0];
     const reader = new FileReader();
     reader.onload = (event) => {
       const data = JSON.parse(event.target.result);
-      setImageData(data);
-      // Автоматически выбираем первое изображение
-      const firstImage = Object.keys(data)[0];
-      setCurrentImage(firstImage);
+      setAnnotationData(data);
+      // Применяем аннотации к соответствующим изображениям
+      const updatedBoxes = {...boundingBoxes};
+      Object.keys(data).forEach(imgName => {
+        const imgId = images.find(img => img.file.name === imgName)?.id;
+        if (imgId) {
+          updatedBoxes[imgId] = data[imgName].map(box => ({
+            bbox: [box.x, box.y, box.x + box.width, box.y + box.height],
+            class: box.class_id ? `class${box.class_id}` : box.class,
+            confidence: box.confidence
+          }));
+        }
+      });
+      setBoundingBoxes(updatedBoxes);
     };
     reader.readAsText(file);
   };
 
-  // Сохранение изменённой разметки
-  const handleSave = () => {
-    const dataStr = JSON.stringify(imageData, null, 2);
-    const blob = new Blob([dataStr], { type: 'application/json' });
+  // Сохранение аннотаций в JSON
+  const handleSaveAnnotations = () => {
+    const dataToSave = {};
+    images.forEach(img => {
+      if (boundingBoxes[img.id]) {
+        dataToSave[img.file.name] = boundingBoxes[img.id].map(box => ({
+          x: box.bbox[0],
+          y: box.bbox[1],
+          width: box.bbox[2] - box.bbox[0],
+          height: box.bbox[3] - box.bbox[1],
+          class: box.class,
+          class_id: parseInt(box.class.replace("class", "")),
+          confidence: box.confidence || 0.9
+        }));
+      }
+    });
+
+    const blob = new Blob([JSON.stringify(dataToSave, null, 2)], {type: 'application/json'});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'updated_annotations.json';
+    a.download = 'annotations.json';
     a.click();
   };
 
-  return (
-    <div className="app">
-      <h1>Редактор разметки</h1>
-      <input
-        type="file"
-        accept=".json"
-        onChange={handleJsonUpload}
-        ref={fileInputRef}
-      />
-      {imageData && currentImage && (
-        <>
-          <BBoxEditor
-            imageName={currentImage}
-            annotations={imageData[currentImage]}
-            onUpdate={(updatedAnnotations) => {
-              setImageData({
-                ...imageData,
-                [currentImage]: updatedAnnotations,
-              });
-            }}
-          />
-          <button onClick={handleSave}>Сохранить разметку</button>
-        </>
-      )}
-    </div>
-  );
-}
-  
-const classNames = {
-  class1: "Нить",
-  class2: "Пленка",
-  class3: "Обломок",
-  class4: "Сфера",
-  class5: "Гранула",
-};
-
-useEffect(() => {
-  if (selectedImage && Array.isArray(boundingBoxes[selectedImage])) {
-    setTempBoxes([...boundingBoxes[selectedImage]]);
-  } else {
-    setTempBoxes([]);
-  }
-  console.log(tempBoxes)
-}, [selectedImage, boundingBoxes]);
-
-useEffect(() => {
-  if (selectedImage && Array.isArray(boundingBoxes[selectedImage])){
-  const newStats = {};
-  Object.values(boundingBoxes).forEach((boxesArray) => {
-    if (Array.isArray(boxesArray)) {
-      boxesArray.forEach((box) => {
-        newStats[box.class] = (newStats[box.class] || 0) + 1;
-      });
-    }
-  });
-
-  setStats(newStats);
-  }
-}, [boundingBoxes]);
+  // Обновление статистики
+  useEffect(() => {
+    const newStats = {};
+    Object.values(boundingBoxes).forEach((boxesArray) => {
+      if (Array.isArray(boxesArray)) {
+        boxesArray.forEach((box) => {
+          newStats[box.class] = (newStats[box.class] || 0) + 1;
+        });
+      }
+    });
+    setStats(newStats);
+  }, [boundingBoxes]);
 
   // Загрузка изображений
   const handleFileUpload = (event) => {
@@ -249,8 +237,6 @@ const handleCancel = () => {
   setIsEditing(false);
 };
 
-
-
   return (
     <div className={styles.container}>
       {/* Верхняя панель */}
@@ -258,23 +244,29 @@ const handleCancel = () => {
         <div className={styles.appTitle}>ДЕТЕКЦИЯ МИКРОПЛАСТИКА</div>
         {!isProcessing ? (
           isEditing ? (
-          <div className={styles.editingControls}>
-            <select
-              className={styles.classSelector}
-              value={selectedClass}
-              onChange={(e) => setSelectedClass(e.target.value)}
-            >
-              <option value="class1">Нить</option>
-              <option value="class2">Пленка</option>
-              <option value="class3">Обломок</option>
-              <option value="class4">Сфера</option>
-              <option value="class5">Гранула</option>
-            </select>
-            <div className={styles.buttonGroup}>
-              <button onClick={handleCancel} className={styles.button}>Отменить</button>
-              <button onClick={handleSave} className={styles.button}>Сохранить</button>
+            <div className={styles.editingControls}>
+              <select
+                className={styles.classSelector}
+                value={selectedClass}
+                onChange={(e) => setSelectedClass(e.target.value)}
+              >
+                {Object.entries(classNames).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+              <div className={styles.buttonGroup}>
+                <button 
+                  onClick={() => {
+                    setShowBBoxEditor(!showBBoxEditor);
+                  }}
+                  className={styles.button}
+                >
+                  {showBBoxEditor ? "Скрыть редактор" : "Показать редактор"}
+                </button>
+                <button onClick={handleCancel} className={styles.button}>Отменить</button>
+                <button onClick={handleSave} className={styles.button}>Сохранить</button>
+              </div>
             </div>
-          </div>
           ) : (
           <div className={styles.buttonGroup}>
             {images.length === 0 ? (
@@ -322,8 +314,7 @@ const handleCancel = () => {
       {/* Основное содержимое */}
       <div className={styles.mainContent}>
         {/* Левая панель (список изображений) */}
-        <div className={styles.leftPanel}>
-        {images.length > 0 ? (
+        <div className={styles.leftPanel}>{images.length > 0 ? (
           images.map((img) => {
 
       const boxes = boundingBoxes[img.id] || [];
@@ -367,10 +358,34 @@ const handleCancel = () => {
     )}
         </div>
 
-        {/* Центральная панель (выбранное изображение) */}
+        {/* Центральная панель */}
         <div className={styles.centerPanel}>
-          {selectedImage ? (
-            <div
+          {selectedImage && showBBoxEditor ? (
+            <BoundingBoxEditor
+              imageSrc={selectedImage}
+              boxes={(boundingBoxes[selectedImage] || []).map(box => ({
+                ...box,
+                color: colors[box.class],
+                x: box.bbox[0],
+                y: box.bbox[1],
+                width: box.bbox[2] - box.bbox[0],
+                height: box.bbox[3] - box.bbox[1]
+              }))}
+              onBoxesChange={(newBoxes) => {
+                setBoundingBoxes(prev => ({
+                  ...prev,
+                  [selectedImage]: newBoxes.map(box => ({
+                    bbox: [box.x, box.y, box.x + box.width, box.y + box.height],
+                    class: box.class,
+                    confidence: box.confidence
+                  }))
+                }));
+              }}
+              selectedClass={selectedClass}
+              colors={colors}
+            />
+          ) : selectedImage ? (
+              <div
               className={styles.imageWrapper}
               onMouseDown={handleMouseDown}
               onMouseUp={handleMouseUp}
@@ -414,5 +429,3 @@ const handleCancel = () => {
 };
 
 export default App;
-
-
