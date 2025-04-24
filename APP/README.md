@@ -95,6 +95,11 @@ venv\Scripts\activate    # Windows
 ```sh
 uvicorn main:app --reload
 ```
+или
+```sh
+python main.py
+```
+
 (Если файл `main.py` находится в корне проекта.)
 
 #### Запуск фронтенда (React)
@@ -106,6 +111,7 @@ npm start
 
 Откройте [http://localhost:3000](http://localhost:3000) в браузере для просмотра фронтенда.
 
+
 ### 6. Дополнительные команды
 
 - Остановка виртуального окружения:
@@ -113,4 +119,8 @@ npm start
   deactivate
   ```
 - Остановка серверов (нажмите `Ctrl + C` в терминале).
+- Сборка exe
+- ```
+  pyinstaller --onefile --add-data "frontend_build;frontend_build" --name poseidonn main.py
+  ```
 
