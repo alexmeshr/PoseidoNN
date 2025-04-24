@@ -13,6 +13,11 @@ const App = () => {
   const [tempBoxes, setTempBoxes] = useState({});
   const [selectedClass, setSelectedClass] = useState("class1");
   const startCoords = useRef(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+
+  const maxWidth = Math.floor(window.innerWidth * 0.5); // Максимальная ширина
+  const maxHeight = Math.floor(window.innerHeight * 0.5); // Максимальная высота
 
 const classNames = {
   class1: "Нить",
@@ -22,13 +27,14 @@ const classNames = {
   class5: "Гранула",
 };
 
+
 useEffect(() => {
   if (selectedImage && Array.isArray(boundingBoxes[selectedImage])) {
     setTempBoxes([...boundingBoxes[selectedImage]]);
   } else {
     setTempBoxes([]);
   }
-  console.log(tempBoxes)
+  //console.log(tempBoxes)
 }, [selectedImage, boundingBoxes]);
 
 useEffect(() => {
@@ -46,16 +52,80 @@ useEffect(() => {
   }
 }, [boundingBoxes]);
 
+
+const resizeImage = (file, maxWidth, maxHeight) => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      const img = new Image();
+
+      img.onload = () => {
+        const originalWidth = img.width;
+        const originalHeight = img.height;
+        let width = originalWidth;
+        let height = originalHeight;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height *= maxWidth / width;
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width *= maxHeight / height;
+            height = maxHeight;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = width;
+        canvas.height = height;
+
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob((blob) => {
+          const resizedFile = new File([blob], file.name, { type: file.type });
+          resolve({
+            file: resizedFile,
+            originalWidth,
+            originalHeight,
+            resizedWidth: width,
+            resizedHeight: height
+          });
+        }, file.type);
+      };
+
+      img.src = reader.result;
+    };
+
+    reader.readAsDataURL(file);
+  });
+};
+
+
   // Загрузка изображений
-  const handleFileUpload = (event) => {
-    const files = Array.from(event.target.files);
-    const imageFiles = files.map((file) => ({
-      id: URL.createObjectURL(file),
-      file,
-      boxes: [],
-    }));
-    setImages((prev) => [...prev, ...imageFiles]);
-  };
+const handleFileUpload = async (event) => {
+  const files = Array.from(event.target.files);
+
+  const resizedImages = await Promise.all(
+    files.map(async (file) => {
+      const resized = await resizeImage(file, maxWidth, maxHeight);
+      return {
+        id: URL.createObjectURL(resized.file),
+        file: resized.file,
+        originalHeight: resized.originalHeight,
+        originalWidth : resized.originalWidth,
+        resizedWidth : resized.resizedWidth,
+        resizedHeight: resized.resizedHeight,
+        boxes: [],
+      };
+    })
+  );
+
+  setImages((prev) => [...prev, ...resizedImages]);
+};
 
   // Удаление всех изображений
   const handleDeleteImages = () => {
@@ -192,6 +262,108 @@ const handleCancel = () => {
 
 
 
+const loadImage = (file) => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.src = URL.createObjectURL(file);
+  });
+};
+
+// для парсинга json
+const handleCheckAnnotationFolder = async (event) => {
+  const files = Array.from(event.target.files);
+
+  const jsonFile = files.find((f) => f.name.endsWith('.json'));
+  const jsonImageFiles = files.filter((f) => f.type.startsWith('image/'));
+
+  if (!jsonFile) {
+    alert("Файл .json с разметкой не найден");
+    return;
+  }
+
+  if (jsonImageFiles.length === 0) {
+    alert("Изображения не найдены в папке");
+    return;
+  }
+  const jsonText = await jsonFile.text();
+  const annotations = JSON.parse(jsonText); // {"IMG_0001.JPG": [...]}
+
+   setIsLoading(true);
+  setProgress(0);
+
+const newBoundingBoxes = {};
+  const totalImages = jsonImageFiles.length;
+  const imageFiles = [];
+
+  for (let i = 0; i < totalImages; i++) {
+    const file = jsonImageFiles[i];
+    const boxesFromJson = annotations[file.name] || [];
+
+    const resized = await resizeImage(file, maxWidth, maxHeight);
+    const resizedFile = resized.file;
+    const originalWidth = resized.originalWidth;
+    const originalHeight = resized.originalHeight;
+
+    const scaleX = resized.resizedWidth / originalWidth;
+    const scaleY = resized.resizedHeight / originalHeight;
+
+    const scaledBoxes = boxesFromJson.flatMap((box) => {
+  // Отфильтровываем ненужные боксы
+  if (box.class === 'dirt') return [];
+  if (box.class === 'fragment' && box.confidence < 0.9) return [];
+
+  // Переводим классы
+  const classMap = {
+    fragment: 'Обломок',
+    fiber: 'Нить',
+    pellet: 'Гранула',
+  };
+
+  const translatedClass = classMap[box.class] || box.class;
+
+  // Переведённые координаты
+  const x = box.x * scaleX;
+  const y = box.y * scaleY;
+  const width = box.width * scaleX;
+  const height = box.height * scaleY;
+  const widthHalf = Math.floor(width / 2);
+  const heightHalf = Math.floor(height / 2);
+
+  return [{
+    bbox: [x - widthHalf, y - heightHalf, x + widthHalf, y + heightHalf],
+    class: translatedClass,
+    confidence: box.confidence,
+    detection_id: box.detection_id,
+  }];
+});
+
+    const imageId = URL.createObjectURL(resizedFile);
+    newBoundingBoxes[imageId] = scaledBoxes;
+    //console.log(resizedFile.name)
+    imageFiles.push({
+      id: imageId,
+      file: resizedFile,
+      originalHeight: originalHeight,
+      originalWidth : originalWidth,
+      resizedWidth : resized.resizedWidth,
+      resizedHeight: resized.resizedHeight,
+      boxes: [], // или scaledBoxes
+    });
+
+    // Обновляем прогресс
+    setProgress(Math.round(((i + 1) / totalImages) * 100));
+  }
+
+  setImages((prev) => [...prev, ...imageFiles]);
+  setBoundingBoxes((prev) => ({ ...prev, ...newBoundingBoxes }));
+
+  setIsLoading(false);
+};
+
+
+
+
   return (
     <div className={styles.container}>
       {/* Верхняя панель */}
@@ -219,6 +391,20 @@ const handleCancel = () => {
           ) : (
           <div className={styles.buttonGroup}>
             {images.length === 0 ? (
+             !isLoading ? (
+            <>
+            <label className={styles.button}>
+              Проверить разметку
+              <input
+                type="file"
+                webkitdirectory="true"
+                directory=""
+                multiple
+                onChange={handleCheckAnnotationFolder}
+                style={{ display: "none" }}
+              />
+            </label>
+
               <label className={styles.button}>
                 Загрузить изображения
                 <input
@@ -229,6 +415,14 @@ const handleCancel = () => {
                   style={{ display: "none" }}
                 />
               </label>
+              </>
+              ):(
+                  <progress
+                className={styles.progressBar}
+                value={progress}
+                max="100"
+              ></progress>
+              )
             ) : (
               <>
                 <button onClick={handleDeleteImages} className={styles.button}>
