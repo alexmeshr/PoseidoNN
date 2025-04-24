@@ -2,6 +2,22 @@ import React, { useState, useRef, useEffect } from "react";
 import axios from 'axios';
 import styles from "./App.module.css";
 
+const usePreventUnload = (shouldWarn) => {
+  useEffect(() => {
+    if (!shouldWarn) return;
+
+    const handleBeforeUnload = (e) => {
+      e.preventDefault();
+      e.returnValue = 'У вас есть несохраненные изменения. Вы уверены, что хотите уйти?';
+      return e.returnValue;
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [shouldWarn]);
+};
+
+
 const App = () => {
   const [images, setImages] = useState([]);
   const [selectedImage, setSelectedImage] = useState(null);
@@ -11,20 +27,23 @@ const App = () => {
   const [boundingBoxes, setBoundingBoxes] = useState({});
   const [isEditing, setIsEditing] = useState(false);
   const [tempBoxes, setTempBoxes] = useState({});
-  const [selectedClass, setSelectedClass] = useState("class1");
+  const [selectedClass, setSelectedClass] = useState("Нить");
   const startCoords = useRef(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  usePreventUnload(hasUnsavedChanges);
 
 
   const maxWidth = Math.floor(window.innerWidth * 0.5); // Максимальная ширина
   const maxHeight = Math.floor(window.innerHeight * 0.5); // Максимальная высота
 
 const classNames = {
-  class1: "Нить",
-  class2: "Пленка",
-  class3: "Обломок",
-  class4: "Сфера",
-  class5: "Гранула",
+  Нить: "Нить",
+  Пленка: "Пленка",
+  Обломок: "Обломок",
+  Сфера: "Сфера",
+  Гранула: "Гранула",
 };
 
 
@@ -128,18 +147,22 @@ const handleFileUpload = async (event) => {
 };
 
   // Удаление всех изображений
-  const handleDeleteImages = () => {
+const handleDeleteImages = () => {
+  const isConfirmed = window.confirm("Вы точно хотите удалить все изображения? Это действие нельзя отменить.");
+
+  if (isConfirmed) {
     setImages([]);
     setSelectedImage(null);
     setStats({});
     setProgress(0);
     setBoundingBoxes({});
-  };
+    setHasUnsavedChanges(false);
+  }
+};
 
  // Отправка изображений на сервер для обработки
   const handleProcessImages = async () => {
     setIsProcessing(true);
-
     const formData = new FormData();
     images.forEach((img, index) => {
       fetch(img)
@@ -252,6 +275,7 @@ const handleRightClick = (e) => {
 const handleSave = () => {
   setBoundingBoxes((prev) => ({ ...prev, [selectedImage]: [...tempBoxes] }));
   setIsEditing(false);
+  setHasUnsavedChanges(true);
 };
 
 // Отмена изменений
@@ -273,8 +297,14 @@ const loadImage = (file) => {
 // для парсинга json
 const handleCheckAnnotationFolder = async (event) => {
   const files = Array.from(event.target.files);
+  const jsonFiles = files.filter(f => f.name.endsWith('.json'));
 
-  const jsonFile = files.find((f) => f.name.endsWith('.json'));
+// Сортируем JSON-файлы по дате изменения (последний созданный будет первым в массиве)
+const sortedJsonFiles = jsonFiles.sort((a, b) => {
+  return new Date(b.lastModified) - new Date(a.lastModified);
+});
+
+  const jsonFile = sortedJsonFiles[0];
   const jsonImageFiles = files.filter((f) => f.type.startsWith('image/'));
 
   if (!jsonFile) {
@@ -311,7 +341,7 @@ const newBoundingBoxes = {};
     const scaledBoxes = boxesFromJson.flatMap((box) => {
   // Отфильтровываем ненужные боксы
   if (box.class === 'dirt') return [];
-  if (box.class === 'fragment' && box.confidence < 0.9) return [];
+  if (box.class === 'fragment' && box.confidence < 0.8) return [];
 
   // Переводим классы
   const classMap = {
@@ -358,9 +388,97 @@ const newBoundingBoxes = {};
   setImages((prev) => [...prev, ...imageFiles]);
   setBoundingBoxes((prev) => ({ ...prev, ...newBoundingBoxes }));
 
+  const newStats = {};
+  Object.values(newBoundingBoxes).forEach((boxesArray) => {
+    if (Array.isArray(boxesArray)) {
+      boxesArray.forEach((box) => {
+        newStats[box.class] = (newStats[box.class] || 0) + 1;
+      });
+    }
+  });
+
+  setStats(newStats);
+  setProgress(0);
   setIsLoading(false);
 };
 
+const downloadJson = (jsonStr, filename) => {
+  const blob = new Blob([jsonStr], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+
+  URL.revokeObjectURL(url);
+};
+
+const exportAnnotationsToJson = async () => {
+  const annotations = {};
+
+  images.forEach((img) => {
+    const imageId = img.id;
+    const fileName = img.file.name;
+    const boxes = boundingBoxes[imageId] || [];
+
+    const scaleX = img.originalWidth / img.resizedWidth;
+    const scaleY = img.originalHeight / img.resizedHeight;
+
+    annotations[fileName] = boxes.map((box) => {
+      const [x1, y1, x2, y2] = box.bbox;
+
+      const centerX = ((x1 + x2) / 2) * scaleX;
+      const centerY = ((y1 + y2) / 2) * scaleY;
+      const width = Math.abs(x2 - x1) * scaleX;
+      const height = Math.abs(y2 - y1) * scaleY;
+
+      return {
+        x: centerX,
+        y: centerY,
+        width,
+        height,
+        confidence: box.confidence,
+        class: box.class,
+        detection_id: box.detection_id,
+      };
+    });
+  });
+
+  const jsonStr = JSON.stringify(annotations, null, 2);
+  const blob = new Blob([jsonStr], { type: 'application/json' });
+
+  if (window.showSaveFilePicker) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: "annotations.json",
+        types: [{
+          description: "JSON Files",
+          accept: { "application/json": [".json"] }
+        }]
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return;
+    } catch (err) {
+      if (err.name !== "AbortError") {
+        console.error("Ошибка при сохранении файла:", err);
+      }
+      // если ошибка, всё равно делаем фолбэк
+    }
+  }
+
+  // Фолбэк на <a> — если API недоступен или возникла ошибка
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = "annotations.json";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
 
 
 
@@ -377,11 +495,11 @@ const newBoundingBoxes = {};
               value={selectedClass}
               onChange={(e) => setSelectedClass(e.target.value)}
             >
-              <option value="class1">Нить</option>
-              <option value="class2">Пленка</option>
-              <option value="class3">Обломок</option>
-              <option value="class4">Сфера</option>
-              <option value="class5">Гранула</option>
+              <option value="Нить">Нить</option>
+              <option value="Пленка">Пленка</option>
+              <option value="Обломок">Обломок</option>
+              <option value="Сфера">Сфера</option>
+              <option value="Гранула">Гранула</option>
             </select>
             <div className={styles.buttonGroup}>
               <button onClick={handleCancel} className={styles.button}>Отменить</button>
@@ -393,8 +511,8 @@ const newBoundingBoxes = {};
             {images.length === 0 ? (
              !isLoading ? (
             <>
-            <label className={styles.button}>
-              Проверить разметку
+            <label className={styles.button}title="Выберите папку, в которой находятся изображения и json-файл с разметкой">
+              Загрузить разметку
               <input
                 type="file"
                 webkitdirectory="true"
@@ -426,7 +544,7 @@ const newBoundingBoxes = {};
             ) : (
               <>
                 <button onClick={handleDeleteImages} className={styles.button}>
-                  Удалить
+                  Удалить все
                 </button>
                 <label className={styles.button}>
                   Загрузить еще
@@ -442,6 +560,7 @@ const newBoundingBoxes = {};
                   Запустить
                 </button>
                <button onClick={() => setIsEditing(true)} className={styles.button}>Редактировать</button>
+               <button onClick={exportAnnotationsToJson} className={styles.button}>Сохранить разметку</button>
               </>
             )}
           </div>

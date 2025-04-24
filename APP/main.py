@@ -1,7 +1,4 @@
 import json
-import pandas as pd
-from PIL import Image
-from loguru import logger
 import sys
 from typing import List
 
@@ -13,16 +10,12 @@ from fastapi.exceptions import HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 
-from io import BytesIO
+#from io import BytesIO
 import os
 import uuid
 import time
 import itertools
 
-from app import get_image_from_bytes
-from app import detect_sample_model
-from app import add_bboxs_on_img
-from app import get_bytes_from_image
 
 app = FastAPI(
     title="Object Detection FastAPI Template",
@@ -31,7 +24,17 @@ app = FastAPI(
     version="2023.1.31",
 )
 
-app.mount("/static", StaticFiles(directory="frontend_build/static"), name="static")
+def resource_path(relative_path):
+    """Позволяет находить путь к папкам внутри .exe"""
+    try:
+        base_path = sys._MEIPASS  # путь, созданный pyinstaller
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
+app = FastAPI()
+static_path = resource_path("frontend_build/static")
+app.mount("/static", StaticFiles(directory=static_path), name="static")
 
 # This function is needed if you want to allow client requests
 # from specific domains (specified in the origins argument) 
@@ -72,7 +75,7 @@ def save_openapi_json():
 # Раздача index.html при доступе к корню
 @app.get("/")
 async def serve_frontend():
-    return FileResponse("frontend_build/index.html")
+    return FileResponse(resource_path("frontend_build/index.html"))
 
 
 @app.get('/healthcheck', status_code=status.HTTP_200_OK)
@@ -135,3 +138,12 @@ async def get_progress(task_id: str):
         return JSONResponse(status_code=404, content={"error": "Task not found"})
 
     return JSONResponse(content=task_progress[task_id])
+
+import uvicorn
+import webbrowser
+
+if __name__ == "__main__":
+    port = 8008
+    url = f"http://localhost:{port}"
+    webbrowser.open(url)
+    uvicorn.run(app, host="0.0.0.0", port=port)

@@ -1,4 +1,6 @@
 /models/
+.idea
+/../.idea/
 /кирюхе/
 /poseidonn/
 /APP/models/
@@ -8,3 +10,7 @@
 /APP/app_frontend/build/
 /APP/app_frontend/node_modules/
 /APP/app_frontend/public/
+/Микропластик/
+/APP/build/
+/test/
+/mintty.exe.stackdump
